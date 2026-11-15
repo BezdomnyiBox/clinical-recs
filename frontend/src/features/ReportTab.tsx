@@ -10,14 +10,14 @@ export default function ReportTab({ pid }: { pid: number }) {
   return (
     <div className="space-y-4">
       <Card>
-        <h3 className="mb-1 font-semibold">Ресурсы</h3>
+        <h3 className="mb-1 text-xl">Ресурсы</h3>
         <p className="text-sm">
           Запросов к модели: {llm.requests}. Токены: {llm.input_tokens} на входе, {llm.output_tokens} на выходе.
           Стоимость: {llm.cost_usd ?? "нет данных"} USD. Время: {llm.seconds.toFixed(1)} с.
         </p>
       </Card>
       <Card>
-        <h3 className="mb-1 font-semibold">Покрытие по документам</h3>
+        <h3 className="mb-1 text-xl">Покрытие по документам</h3>
         {data.documents.map((d) => (
           <p key={d.document_id} className="text-sm">
             {d.filename}: {DOC_STATUS[d.status]?.label ?? d.status}, страниц {d.pages_total ?? "—"},{" "}
@@ -26,9 +26,9 @@ export default function ReportTab({ pid }: { pid: number }) {
         ))}
       </Card>
       <Card>
-        <h3 className="mb-1 font-semibold">Выгрузка</h3>
+        <h3 className="mb-1 text-xl">Выгрузка</h3>
         <div className="flex gap-4 text-sm">
-          <a className="text-primary underline" href={`/api/projects/${pid}/export/json`} target="_blank" rel="noreferrer">JSON</a>
+          <a className="text-link" href={`/api/projects/${pid}/export/json`} target="_blank" rel="noreferrer">JSON</a>
           <span className="text-muted-foreground">Текст и Word: в разработке</span>
         </div>
       </Card>

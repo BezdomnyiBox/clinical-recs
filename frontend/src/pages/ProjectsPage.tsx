@@ -5,8 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { api } from "@/lib/api";
 
-const field = "h-9 w-full rounded-md border px-3 text-sm";
-
 export default function ProjectsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -24,11 +22,11 @@ export default function ProjectsPage() {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       <section>
-        <h2 className="mb-3 font-semibold">Проекты</h2>
+        <h2 className="mb-4 text-2xl">Проекты</h2>
         <div className="space-y-2">
           {projects.map((p) => (
             <Card key={p.id}>
-              <Link to={`/projects/${p.id}`} className="font-medium text-primary">{p.title}</Link>
+              <Link to={`/projects/${p.id}`} className="text-link text-[17px]">{p.title}</Link>
               <p className="text-sm text-muted-foreground">{p.age_group} {p.icd_codes.join(", ")}</p>
             </Card>
           ))}
@@ -36,12 +34,12 @@ export default function ProjectsPage() {
         </div>
       </section>
       <section>
-        <h2 className="mb-3 font-semibold">Новый проект</h2>
-        <div className="space-y-2">
-          <input className={field} placeholder="Тема" value={form.title} onChange={set("title")} />
-          <input className={field} placeholder="Возрастная группа" value={form.age_group} onChange={set("age_group")} />
-          <input className={field} placeholder="Коды МКБ-10 через запятую" value={form.icd} onChange={set("icd")} />
-          <input className={field} placeholder="Организация-разработчик" value={form.organization} onChange={set("organization")} />
+        <h2 className="mb-4 text-2xl">Новый проект</h2>
+        <div className="space-y-3 rounded-[20px] border border-black/6 bg-card p-5">
+          <input className="field" placeholder="Тема" value={form.title} onChange={set("title")} />
+          <input className="field" placeholder="Возрастная группа" value={form.age_group} onChange={set("age_group")} />
+          <input className="field" placeholder="Коды МКБ-10 через запятую" value={form.icd} onChange={set("icd")} />
+          <input className="field" placeholder="Организация-разработчик" value={form.organization} onChange={set("organization")} />
           <Button disabled={!form.title || create.isPending} onClick={() => create.mutate()}>Создать проект</Button>
         </div>
       </section>

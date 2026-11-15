@@ -22,7 +22,7 @@ export default function ThesesTab({ pid }: { pid: number }) {
         const items = theses.filter((t) => t.section === key);
         return (
           <section key={key}>
-            <h3 className="mb-2 font-semibold">{title}</h3>
+            <h3 className="mb-2 text-xl">{title}</h3>
             {!items.length && <p className="text-sm text-muted-foreground">Недостаточно материалов</p>}
             <div className="space-y-2">
               {items.map((t) => (
@@ -42,11 +42,11 @@ export default function ThesesTab({ pid }: { pid: number }) {
         );
       })}
       <section className="space-y-2 border-t pt-4">
-        <h3 className="font-semibold">Добавить экспертный тезис</h3>
-        <select className="h-9 rounded-md border px-2 text-sm" value={section} onChange={(e) => setSection(e.target.value)}>
+        <h3 className="text-xl">Добавить экспертный тезис</h3>
+        <select className="field" value={section} onChange={(e) => setSection(e.target.value)}>
           {SECTIONS.map(([k, t]) => <option key={k} value={k}>{t}</option>)}
         </select>
-        <textarea className="w-full rounded-md border p-2 text-sm" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+        <textarea className="field" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Текст тезиса" />
         <Button disabled={!text.trim() || add.isPending} onClick={() => add.mutate()}>Добавить тезис</Button>
       </section>
     </div>

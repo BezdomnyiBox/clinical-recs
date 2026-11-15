@@ -17,13 +17,13 @@ export default function ProjectPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold">{project?.title}</h1>
-      <p className="mb-4 text-sm text-muted-foreground">
-        {project?.age_group} {project?.icd_codes.join(", ")} {project?.organization}
+      <h1 className="text-[28px] leading-tight">{project?.title}</h1>
+      <p className="mb-5 text-[15px] text-muted-foreground">
+        {[project?.age_group, project?.icd_codes.join(", "), project?.organization].filter(Boolean).join(" · ")}
       </p>
-      <nav className="mb-4 flex gap-2 border-b pb-2">
+      <nav className="mb-6 flex flex-wrap gap-2">
         {TABS.map(([key, label]) => (
-          <Button key={key} size="sm" variant={tab === key ? "default" : "ghost"} onClick={() => setTab(key)}>{label}</Button>
+          <Button key={key} size="sm" className="rounded-full" variant={tab === key ? "dark" : "outline"} onClick={() => setTab(key)}>{label}</Button>
         ))}
       </nav>
       {tab === "docs" && <DocumentsTab pid={pid} />}

@@ -21,9 +21,9 @@ export default function CardsTab({ pid }: { pid: number }) {
         return (
           <Card key={c.id} className="space-y-2">
             <p className="font-medium">{c.statement_ru}</p>
-            <blockquote className="border-l-2 pl-3 text-sm italic text-muted-foreground">{c.quote}</blockquote>
+            <blockquote className="border-l-[3px] border-accent pl-3 text-[15px] italic leading-snug text-black/70">{c.quote}</blockquote>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <a className="text-primary underline" href={pdfUrl(c.document_id, c.page_number)} target="_blank" rel="noreferrer">
+              <a className="text-link" href={pdfUrl(c.document_id, c.page_number)} target="_blank" rel="noreferrer">
                 Открыть стр. {c.page_number}
               </a>
               <Badge tone={q.tone}>{q.label}</Badge>
@@ -31,8 +31,8 @@ export default function CardsTab({ pid }: { pid: number }) {
             </div>
             {c.problems.map((p) => <p key={p} className="text-sm text-destructive">{p}</p>)}
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => decide.mutate({ id: c.id, status: "confirmed" })}>Подтвердить</Button>
-              <Button size="sm" variant="outline" onClick={() => decide.mutate({ id: c.id, status: "rejected" })}>Отклонить</Button>
+              <Button size="sm" className="rounded-full" onClick={() => decide.mutate({ id: c.id, status: "confirmed" })}>Подтвердить</Button>
+              <Button size="sm" variant="outline" className="rounded-full" onClick={() => decide.mutate({ id: c.id, status: "rejected" })}>Отклонить</Button>
             </div>
           </Card>
         );

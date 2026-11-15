@@ -3,15 +3,16 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const variants = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50",
+  "inline-flex items-center justify-center rounded-xl text-[15px] font-medium tracking-tight transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-40",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:opacity-90",
-        outline: "border bg-background hover:bg-muted",
-        ghost: "hover:bg-muted",
+        default: "bg-accent text-black hover:bg-[#f5d400]",
+        dark: "bg-black text-white hover:bg-neutral-800",
+        outline: "border border-black/10 bg-white text-black hover:bg-neutral-100",
+        ghost: "text-black hover:bg-black/5",
       },
-      size: { default: "h-9 px-4", sm: "h-8 px-3" },
+      size: { default: "h-12 px-5", sm: "h-9 px-4 text-sm" },
     },
     defaultVariants: { variant: "default", size: "default" },
   },

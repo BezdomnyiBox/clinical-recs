@@ -14,7 +14,11 @@ export default function DocumentsTab({ pid }: { pid: number }) {
 
   return (
     <div className="space-y-3">
-      <input type="file" accept="application/pdf" multiple onChange={(e) => e.target.files && upload.mutate(e.target.files)} />
+      <label className="flex cursor-pointer flex-col items-center justify-center rounded-[20px] border border-dashed border-black/15 bg-card px-6 py-8 text-center transition-colors hover:border-black/40">
+        <span className="text-[17px] font-medium">{upload.isPending ? "Загрузка…" : "Загрузить PDF"}</span>
+        <span className="mt-1 text-sm text-muted-foreground">Один или несколько файлов по теме проекта</span>
+        <input className="sr-only" type="file" accept="application/pdf" multiple onChange={(e) => e.target.files && upload.mutate(e.target.files)} />
+      </label>
       {upload.error && <p className="text-sm text-destructive">{String(upload.error)}</p>}
       {docs.map((d) => {
         const st = DOC_STATUS[d.status] ?? { label: d.status, tone: "neutral" as const };
