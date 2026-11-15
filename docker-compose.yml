@@ -1,0 +1,40 @@
+services:
+  mysql:
+    image: mysql:8.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    env_file: .env
+    depends_on: { mysql: { condition: service_healthy } }
+    ports: ["8000:8000"]
+    volumes: [./backend/app:/app/app, uploads:/data/uploads]
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:  # обработка PDF в фоне: тот же образ, другая команда
+    build: ./backend
+    env_file: .env
+    depends_on: { mysql: { condition: service_healthy } }
+    volumes: [./backend/app:/app/app, uploads:/data/uploads]
+    command: python -m app.worker
+
+  frontend:
+    build: ./frontend
+    ports: ["5173:5173"]
+    environment: { VITE_PROXY_TARGET: "http://backend:8000" }
+    volumes: [./frontend/src:/app/src]
+    depends_on: [backend]
+
+volumes:
+  mysql_data:
+  uploads:

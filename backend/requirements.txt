@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pydantic-settings
+sqlalchemy>=2.0
+pymysql
+cryptography
+pymupdf
+langchain-openai
+langgraph
+python-docx
