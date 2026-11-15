@@ -1,14 +1,16 @@
 import { Link, Route, Routes } from "react-router-dom";
 import ProjectPage from "./pages/ProjectPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import Logo from './assets/logo.svg';
+
 
 export default function App() {
   return (
     <div className="min-h-screen">
-      <div className="h-1 bg-accent" />
+      {/* <div className="h-1 bg-accent" /> */}
       <header className="sticky top-0 z-10 border-b border-black/8 bg-white">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-4">
-          <span className="size-8 shrink-0 rounded-[10px] bg-accent" aria-hidden />
+          <img src={Logo} alt="Logo" className="size-8" />
           <div>
             <Link to="/" className="text-[20px] font-medium tracking-tight">
               Клинические рекомендации из статей

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- документ -->
+  <path d="M20 8h17l9 9v35a2 2 0 0 1-2 2H20a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2Z"
+        stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M37 8v9h9" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round"/>
+
+  <!-- строки -->
+  <path d="M25 26h14M25 33h14M25 40h9" stroke="currentColor"
+        stroke-width="3" stroke-linecap="round"/>
+
+  <!-- крест -->
+  <path d="M44 30h6v8h8v6h-8v8h-6v-8h-8v-6h8v-8Z" fill="currentColor"/>
+</svg>
