@@ -10,6 +10,11 @@ export default function ProjectsPage() {
   const navigate = useNavigate();
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: api.projects });
   const [form, setForm] = useState({ title: "", age_group: "adults", icd: "", organization: "" });
+  const [icdQuery, setIcdQuery] = useState("");
+  const { data: icdMatches = [] } = useQuery({
+    queryKey: ["icd10", icdQuery], queryFn: () => api.searchIcd10(icdQuery),
+    enabled: icdQuery.trim().length >= 2,
+  });
   const create = useMutation({
     mutationFn: () => api.createProject({
       title: form.title, age_group: form.age_group, organization: form.organization,
@@ -42,7 +47,16 @@ export default function ProjectsPage() {
             <option value="children">Дети</option>
             <option value="mixed">Взрослые и дети</option>
           </select>
-          <input className="field" placeholder="Коды МКБ-10 через запятую" value={form.icd} onChange={set("icd")} />
+          <input className="field" placeholder="Поиск по коду или диагнозу МКБ-10" value={icdQuery} onChange={(e) => setIcdQuery(e.target.value)} />
+          {!!icdMatches.length && <div className="max-h-56 overflow-auto rounded-xl border bg-card p-1">
+            {icdMatches.map((item) => <button key={item.code} type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-black/5" onClick={() => {
+              const codes = new Set(form.icd.split(",").map((code) => code.trim()).filter(Boolean));
+              codes.add(item.code);
+              setForm({ ...form, icd: Array.from(codes).join(", ") });
+              setIcdQuery("");
+            }}><strong>{item.code}</strong> — {item.name}</button>)}
+          </div>}
+          <p className="text-sm text-muted-foreground">Выбрано: {form.icd || "нет кодов"}</p>
           <input className="field" placeholder="Организация-разработчик" value={form.organization} onChange={set("organization")} />
           <Button disabled={!form.title || create.isPending} onClick={() => create.mutate()}>Создать проект</Button>
         </div>
