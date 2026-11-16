@@ -2,15 +2,32 @@ export type Project = { id: number; title: string; age_group: string; icd_codes:
 export type Doc = { id: number; filename: string; status: string; status_detail: string | null; page_count: number | null };
 export type Card = {
   id: number; document_id: number; page_number: number; statement_ru: string; population: string | null;
-  intervention: string | null; quote: string; quote_verified: string; problems: string[]; review_status: string;
+  intervention: string | null; outcome: string | null; conditions: string | null; subject: string | null;
+  quote: string; quote_verified: string; meaning_verified: string; problems: string[]; review_status: string;
+  pending_version: Record<string, unknown> | null;
 };
 export type Thesis = {
   id: number; section: string; text: string; provenance: string; comment: string | null;
   udd: number | null; uur: string | null; review_status: string; card_ids: number[];
+  pending_version: Record<string, unknown> | null; subsection_title: string | null;
+  direction: string | null; strength_phrase: string | null; grade_rationale: string | null;
+  intervention: { type?: string; action?: string } | null;
+  quality_criterion: { is_criterion: boolean; criterion_text?: string | null; applicable_stage?: string; measurable?: boolean; auto_eligible?: boolean } | null;
 };
 export type Report = {
   documents: { document_id: number; filename: string; status: string; detail: string | null; pages_total: number | null; pages_by_status: Record<string, number> }[];
   llm: { requests: number; input_tokens: number; output_tokens: number; cost_usd: number | null; seconds: number };
+};
+export type IcdCode = { code: string; name: string; parent_code: string | null; active: boolean };
+export type Checklist = {
+  source: { title: string; file: string; pages: number };
+  sections: { title: string; page: number }[];
+  items: { id: string; section: string; text: string; source_page: number; response: string; comment: string }[];
+};
+export type Conflict = {
+  id: number; card_ids: number[]; status: string; description: string;
+  sides: { card_id: number; statement_ru: string; predicate: string | null; negation: boolean;
+    quote: string; page_number: number; document_id: number; filename: string | null }[];
 };
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -36,7 +53,13 @@ export const api = {
   cards: (pid: number) => req<Card[]>(`/projects/${pid}/cards`),
   patchCard: (id: number, b: Partial<Card>) => req<Card>(`/cards/${id}`, send("PATCH", b)),
   theses: (pid: number) => req<Thesis[]>(`/projects/${pid}/theses`),
+  patchThesis: (id: number, b: Partial<Thesis>) => req<Thesis>(`/theses/${id}`, send("PATCH", b)),
   addExpertThesis: (pid: number, b: { section: string; text: string }) => req<Thesis>(`/projects/${pid}/theses`, send("POST", b)),
   report: (pid: number) => req<Report>(`/projects/${pid}/report`),
+  searchIcd10: (query: string) => req<IcdCode[]>(`/icd10?q=${encodeURIComponent(query)}`),
+  checklist: (pid: number) => req<Checklist>(`/projects/${pid}/checklist`),
+  saveChecklistAnswer: (pid: number, itemId: string, body: { response: string; comment: string }) =>
+    req(`/projects/${pid}/checklist/${itemId}`, send("PUT", body)),
+  conflicts: (pid: number) => req<Conflict[]>(`/projects/${pid}/conflicts`),
 };
 export const pdfUrl = (did: number, page: number) => `/api/documents/${did}/file#page=${page}`;
