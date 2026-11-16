@@ -32,11 +32,14 @@ def run(job_id: int, doc_id: int):
         err = f"{type(e).__name__}: {e}"
     with SessionLocal() as s:
         job = s.get(Job, job_id)
+        if job is None:
+            return
         job.finished_at = datetime.now()
         job.status, job.error = ("error", err) if err else ("done", None)
         if err:
             doc = s.get(Document, doc_id)
-            doc.status, doc.status_detail = "failed", err
+            if doc is not None:
+                doc.status, doc.status_detail = "failed", err
         s.commit()
 
 

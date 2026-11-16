@@ -58,7 +58,9 @@ def udd_for_source(
     study_design: str | None, intervention_type: str | None
 ) -> int | None:
     scale = SCALE_BY_TYPE.get(intervention_type or "")
-    return UDD_BY_DESIGN.get(scale, {}).get(study_design or "")
+    if scale is None or study_design is None:
+        return None
+    return UDD_BY_DESIGN[scale].get(study_design)
 
 
 def aggregate_udd(udds: list[int | None]) -> int | None:

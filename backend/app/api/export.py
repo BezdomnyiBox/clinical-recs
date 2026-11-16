@@ -109,7 +109,11 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
         .all()
     )
     for call in llm_calls:
-        document = documents_by_id.get(call.document_id)
+        document = (
+            documents_by_id.get(call.document_id)
+            if call.document_id is not None
+            else None
+        )
         activity.append(
             {
                 "id": f"llm-{call.id}",

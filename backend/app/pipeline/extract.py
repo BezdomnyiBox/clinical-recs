@@ -2,12 +2,14 @@
 
 import hashlib
 import json
+import logging
 import re
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import settings
 from app.db import SessionLocal
@@ -16,6 +18,8 @@ from app.pipeline.activity import finish_llm_call, start_llm_call
 from app.pipeline.grading import udd_for_source
 from app.pipeline.llm import get_llm
 from app.pipeline.verify import content_hash, quote_on_page
+
+logger = logging.getLogger(__name__)
 
 SPEC = json.loads(
     (Path(__file__).parent.parent / "spec" / "kr_recommendation.schema.json").read_text(
@@ -79,7 +83,26 @@ class Biblio(BaseModel):
     population: str | None = Field(
         None, description="Кто участвовал: возраст, состояние"
     )
-    study_design: Literal[DESIGNS] | None = None
+    study_design: (
+        Literal[
+            "rct",
+            "meta_analysis_rct",
+            "systematic_review_rct",
+            "meta_analysis_non_rct",
+            "systematic_review_non_rct",
+            "narrative_review",
+            "cohort",
+            "case_control",
+            "non_comparative",
+            "case_series",
+            "case_report",
+            "meta_analysis_diagnostic",
+            "diagnostic_with_reference",
+            "diagnostic_without_reference",
+            "expert_opinion",
+        ]
+        | None
+    ) = None
     design_basis: str | None = Field(
         None, description="Одна фраза: по каким признакам определён дизайн"
     )
@@ -183,7 +206,7 @@ def _call(
     llm = get_llm(max_tokens=max_tokens).with_structured_output(
         schema, method="function_calling", include_raw=True
     )
-    prompt_hash = hashlib.sha256(f"{system}\0{user}".encode("utf-8")).hexdigest()
+    prompt_hash = hashlib.sha256(f"{system}\0{user}".encode()).hexdigest()
     call_id, started = start_llm_call(
         job_id=job_id,
         document_id=doc_id,
@@ -204,8 +227,8 @@ def _call(
     except Exception as exc:
         try:
             finish_llm_call(call_id, started, error=exc)
-        except Exception:
-            pass
+        except SQLAlchemyError:
+            logger.exception("Не удалось сохранить ошибку вызова LLM %s", call_id)
         raise
 
     if out.get("parsed") is None:
@@ -248,7 +271,9 @@ def _llm_result_summary(schema, parsed, call_context: dict | None = None) -> dic
             "relevance_reason": parsed.relevance_reason[:300],
         }
     if schema is Units:
-        recommendations = sum(unit.card_type == "recommendation" for unit in parsed.units)
+        recommendations = sum(
+            unit.card_type == "recommendation" for unit in parsed.units
+        )
         return {
             "cards_proposed": len(parsed.units),
             "recommendations_proposed": recommendations,
@@ -277,6 +302,8 @@ def relevance(state):
     """Библиография, дизайн источника и релевантность теме. Нерелевантный источник дальше не обрабатывается."""
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
+        if doc is None:
+            return {"relevant": False}
         if doc.relevance == "forced":  # пользователь настоял на обработке
             return {"relevant": True}
         first = (
@@ -303,6 +330,8 @@ def relevance(state):
     )
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
+        if doc is None:
+            return {"relevant": False}
         doc.biblio = b.model_dump(
             exclude={"study_design", "relevance", "relevance_reason"}
         )
@@ -324,6 +353,8 @@ def _save_units(doc_id: int, study_design: str | None, chunk, units: list[Unit])
     texts = dict(chunk)
     with SessionLocal() as s:
         doc = s.get(Document, doc_id)
+        if doc is None:
+            return 0
         existing_cards = s.query(EvidenceCard).filter_by(document_id=doc_id).all()
         existing = {c.content_hash: c for c in existing_cards}
         by_page = {}
@@ -362,7 +393,9 @@ def _save_units(doc_id: int, study_design: str | None, chunk, units: list[Unit])
                     candidates.sort(key=lambda item: item[0], reverse=True)
                     best = candidates[0]
                     second_score = candidates[1][0] if len(candidates) > 1 else 0.0
-                    if best[0] >= 0.86 and (len(candidates) == 1 or best[0] - second_score >= 0.12):
+                    if best[0] >= 0.86 and (
+                        len(candidates) == 1 or best[0] - second_score >= 0.12
+                    ):
                         c = best[1]
             if c:
                 if data != (c.auto_data or {}):
@@ -408,6 +441,8 @@ def extract(state):
     doc_id, job_id = state["document_id"], state.get("job_id")
     with SessionLocal() as s:
         doc = s.get(Document, doc_id)
+        if doc is None:
+            raise ValueError(f"Document {doc_id} not found")
         study_design, ctx = doc.study_design, _project_context(s, doc)
         pages = []
         for p in s.query(Page).filter_by(document_id=doc_id).order_by(Page.number):
@@ -435,7 +470,10 @@ def extract(state):
             )
             _save_units(doc_id, study_design, chunk, res.units)
             status, err = "processed", None
-        except Exception as e:  # сбой фрагмента не должен терять остальные
+        except Exception as e:  # noqa: BLE001, RUF100
+            logger.exception(
+                "Ошибка обработки фрагмента документа %s, страницы %s", doc_id, nums
+            )
             status, err = "error", f"{type(e).__name__}: {e}"[:500]
             last_err, fatal = err, getattr(e, "status_code", None) in FATAL_HTTP
         with SessionLocal() as s:

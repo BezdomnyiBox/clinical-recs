@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import zipfile
 
-from lxml import etree
+import lxml.etree as etree
 
 from app.models import Document, Project, Thesis
 from app.pipeline.icd10 import load_index
@@ -266,7 +266,7 @@ def _fill_references(body, theses: list[Thesis], sources_by_id: dict[int, Docume
         p for p in paragraphs[heading_index + 1:next_heading_index]
         if _text(p) == "….." and p.find(f"{W('pPr')}/{W('pStyle')}") is not None
     ]
-    used_doc_ids = sorted(citation_numbers, key=citation_numbers.get)
+    used_doc_ids = sorted(citation_numbers, key=lambda doc_id: citation_numbers[doc_id])
     references = [_format_reference(sources_by_id[doc_id]) for doc_id in used_doc_ids if doc_id in sources_by_id]
     while len(slots) < len(references) and slots:
         clone = _clone_paragraph(slots[-1], [("", None)])

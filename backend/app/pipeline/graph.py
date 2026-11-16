@@ -1,5 +1,6 @@
 from collections import Counter
-from typing import TypedDict
+from typing import Any, cast
+from typing_extensions import NotRequired, TypedDict
 import re
 import unicodedata
 
@@ -19,11 +20,11 @@ from app.pipeline.grading import (
 )
 
 
-class State(TypedDict, total=False):
+class State(TypedDict):
     document_id: int
-    job_id: int
-    supported: bool
-    relevant: bool
+    job_id: NotRequired[int]
+    supported: NotRequired[bool]
+    relevant: NotRequired[bool]
 
 
 _NUMBER = re.compile(
@@ -110,6 +111,8 @@ RECOMMENDATION_PREFIXES = (
 def ingest(state: State):
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
+        if doc is None:
+            raise ValueError(f"Document {state['document_id']} not found")
         doc.status = "processing"
         texts = extract_pages(doc.stored_path)
         doc.page_count = len(texts)
@@ -186,6 +189,8 @@ def dedupe(state: State):
     """Merge exact clinical duplicates and retain both sides of contradictions."""
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
+        if doc is None:
+            return {}
         if not doc:
             return {}
         cards = (
@@ -267,6 +272,8 @@ def assign_sections(state: State):
     """
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
+        if doc is None:
+            return {}
         if not doc:
             return {}
         cards = (
@@ -407,6 +414,8 @@ def assign_sections(state: State):
 def finalize(state: State):
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
+        if doc is None:
+            return {}
         if doc.status == "irrelevant":  # статус и причину выставил узел relevance
             return {}
         failed = s.query(Page).filter_by(document_id=doc.id, status="error").count()
@@ -559,7 +568,7 @@ def _observe_node(name, fn):
     return run
 
 
-builder = StateGraph(State)
+builder = StateGraph(cast(Any, State))
 for name, fn in NODES:
     builder.add_node(name, _observe_node(name, fn))
 builder.add_edge(START, "ingest")
