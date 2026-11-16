@@ -30,7 +30,9 @@ export default function ReportTab({ pid }: { pid: number }) {
         <div className="flex gap-4 text-sm">
           <a className="text-link" href={`/api/projects/${pid}/export/json`} target="_blank" rel="noreferrer">JSON</a>
           <a className="text-link" href={`/api/projects/${pid}/export/validate`} target="_blank" rel="noreferrer">Проверка по схеме</a>
-          <span className="text-muted-foreground">Текст и Word: в разработке</span>
+          <a className="text-link" href="/api/checklist" target="_blank" rel="noreferrer">Чек-лист требований</a>
+          <a className="text-link" href={`/api/projects/${pid}/export/text`}>Текст</a>
+          <a className="text-link" href={`/api/projects/${pid}/export/docx`}>Word</a>
         </div>
       </Card>
     </div>
