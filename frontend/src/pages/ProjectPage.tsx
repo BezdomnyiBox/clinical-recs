@@ -3,12 +3,14 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import CardsTab from "@/features/CardsTab";
+import ChecklistTab from "@/features/ChecklistTab";
+import ConflictsTab from "@/features/ConflictsTab";
 import DocumentsTab from "@/features/DocumentsTab";
 import ReportTab from "@/features/ReportTab";
 import ThesesTab from "@/features/ThesesTab";
 import { api } from "@/lib/api";
 
-const TABS = [["docs", "Документы"], ["cards", "Карточки"], ["theses", "Тезисы"], ["report", "Отчёт и выгрузка"]] as const;
+const TABS = [["docs", "Документы"], ["cards", "Карточки"], ["theses", "Тезисы"], ["conflicts", "Противоречия"], ["checklist", "Чек-лист"], ["report", "Отчёт и выгрузка"]] as const;
 
 export default function ProjectPage() {
   const pid = Number(useParams().id);
@@ -29,6 +31,8 @@ export default function ProjectPage() {
       {tab === "docs" && <DocumentsTab pid={pid} />}
       {tab === "cards" && <CardsTab pid={pid} />}
       {tab === "theses" && <ThesesTab pid={pid} />}
+      {tab === "conflicts" && <ConflictsTab pid={pid} />}
+      {tab === "checklist" && <ChecklistTab pid={pid} />}
       {tab === "report" && <ReportTab pid={pid} />}
     </div>
   );
