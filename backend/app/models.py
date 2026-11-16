@@ -9,6 +9,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -215,6 +216,16 @@ class QualityCriterion(TS, Base):
     text: Mapped[str] = mapped_column(Text)
     thesis_ids: Mapped[list] = mapped_column(JSON, default=list)
     review_status: Mapped[str] = mapped_column(String(16), default="new")
+
+
+class ChecklistAnswer(TS, Base):
+    __tablename__ = "checklist_answers"
+    __table_args__ = (UniqueConstraint("project_id", "item_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    item_id: Mapped[str] = mapped_column(String(16))
+    response: Mapped[str] = mapped_column(String(24), default="unreviewed")
+    comment: Mapped[str] = mapped_column(Text, default="")
 
 
 class ExpertEdit(TS, Base):
