@@ -2,7 +2,22 @@ import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { api, type ActivityEvent } from "@/lib/api";
 import { DOC_STATUS } from "@/lib/labels";
-import { Trace, TraceItem, type TraceStatus } from "@/components/ui/trace";
+import {
+  CircleAlertIcon,
+  CircleCheckIcon,
+  CircleDashedIcon,
+  LoaderCircleIcon,
+} from "lucide-react";
+import {
+  Trace,
+  TraceCollapsible,
+  TraceCollapsibleContent,
+  TraceCollapsibleTrigger,
+  TraceDescription,
+  TraceIcon,
+  TraceLine,
+  TraceTitle,
+} from "@/components/ui/trace";
 
 const STEP_LABELS: Record<string, string> = {
   ingest: "Чтение PDF",
@@ -14,14 +29,6 @@ const STEP_LABELS: Record<string, string> = {
   dedupe: "Поиск дубликатов и противоречий",
   assign_sections: "Формирование тезисов",
   finalize: "Завершение обработки",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  running: "Выполняется",
-  completed: "Завершено",
-  failed: "Ошибка",
-  parse_error: "Не удалось разобрать ответ",
-  skipped: "Пропущено",
 };
 
 const SUMMARY_LABELS: Record<string, string> = {
@@ -89,16 +96,33 @@ function formatTime(value: string | null): string {
     : new Intl.DateTimeFormat("ru-RU", { dateStyle: "short", timeStyle: "medium" }).format(date);
 }
 
-function traceStatus(status: string): TraceStatus | undefined {
+function traceStatus(status: string): "running" | "error" | "pending" | undefined {
   if (status === "running") return "running";
   if (status === "failed" || status === "parse_error") return "error";
-  if (status === "skipped") return "skipped";
+  if (status === "skipped") return "pending";
   return undefined;
 }
 
 function eventTitle(event: ActivityEvent): string {
   const label = STEP_LABELS[event.step] ?? event.step;
-  return event.kind === "model" ? `Модель: ${label}` : label;
+  const subject = event.kind === "model" ? "Модель" : "Этап";
+  const prefix = event.status === "running"
+    ? "Выполняется"
+    : event.status === "failed"
+      ? "Ошибка"
+      : event.status === "parse_error"
+        ? "Ответ не разобран"
+        : event.status === "skipped"
+          ? "Пропущено"
+          : "Завершено";
+  return `${prefix} · ${subject}: ${label}`;
+}
+
+function ActivityIcon({ status }: { status: string }) {
+  if (status === "running") return <LoaderCircleIcon className="animate-spin" />;
+  if (status === "failed" || status === "parse_error") return <CircleAlertIcon />;
+  if (status === "skipped") return <CircleDashedIcon />;
+  return <CircleCheckIcon />;
 }
 
 function eventDescription(event: ActivityEvent): string {
@@ -106,7 +130,6 @@ function eventDescription(event: ActivityEvent): string {
     ? Math.max(0, (Date.now() - new Date(event.started_at).getTime()) / 1000)
     : event.duration_seconds;
   const parts = [
-    STATUS_LABELS[event.status] ?? event.status,
     event.filename,
     event.kind === "model" && event.model ? event.model : null,
     event.page_start != null
@@ -210,15 +233,23 @@ export default function ReportTab({ pid }: { pid: number }) {
         ) : (
           <Trace>
             {data.activity.map((event) => (
-              <TraceItem
+              <TraceCollapsible
                 key={event.id}
-                title={eventTitle(event)}
-                description={eventDescription(event)}
-                status={traceStatus(event.status)}
                 defaultOpen={event.status === "running"}
               >
-                <ActivityDetails event={event} />
-              </TraceItem>
+                <TraceCollapsibleTrigger>
+                  <TraceLine status={traceStatus(event.status)}>
+                    <TraceIcon><ActivityIcon status={event.status} /></TraceIcon>
+                    <TraceTitle>{eventTitle(event)}</TraceTitle>
+                    <TraceDescription className="max-w-[50%] whitespace-normal text-left">
+                      {eventDescription(event)}
+                    </TraceDescription>
+                  </TraceLine>
+                </TraceCollapsibleTrigger>
+                <TraceCollapsibleContent className="text-foreground">
+                  <ActivityDetails event={event} />
+                </TraceCollapsibleContent>
+              </TraceCollapsible>
             ))}
           </Trace>
         )}
