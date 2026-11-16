@@ -9,3 +9,4 @@ pymupdf
 langchain-openai
 langgraph
 python-docx
+jsonschema
