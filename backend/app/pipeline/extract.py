@@ -22,6 +22,12 @@ SPEC = json.loads(
 DESIGNS = tuple(SPEC["$defs"]["study_design_enum"]["enum"])
 MAX_CHARS = 7000  # размер фрагмента: сколько текста страниц уходит в один запрос
 MIN_PAGE_CHARS = 200  # короче - страница пропускается (титул, пустая)
+BIBLIO_MAX_TOKENS = 1500  # ответ с библиографией короткий
+FATAL_HTTP = (
+    401,
+    402,
+    403,
+)  # ключ или кредиты: повторять остальные фрагменты бессмысленно
 
 SYSTEM_BIBLIO = """Ты определяешь библиографические данные и дизайн научного источника по его первым страницам и оцениваешь его релевантность теме клинической рекомендации.
 
@@ -123,8 +129,16 @@ def looks_like_references(text: str) -> bool:
     return numbered >= 8 and years >= 8
 
 
-def _call(schema, system: str, user: str, doc_id: int, job_id: int | None, step: str):
-    llm = get_llm().with_structured_output(
+def _call(
+    schema,
+    system: str,
+    user: str,
+    doc_id: int,
+    job_id: int | None,
+    step: str,
+    max_tokens: int | None = None,
+):
+    llm = get_llm(max_tokens=max_tokens).with_structured_output(
         schema, method="function_calling", include_raw=True
     )
     started = time.time()
@@ -133,6 +147,12 @@ def _call(schema, system: str, user: str, doc_id: int, job_id: int | None, step:
         job_id, doc_id, step, out["raw"], started
     )  # токены пишем и при неудачном разборе
     if out.get("parsed") is None:
+        if (getattr(out["raw"], "response_metadata", {}) or {}).get(
+            "finish_reason"
+        ) == "length":
+            raise ValueError(
+                "ответ обрезан по max_tokens: увеличьте OPENROUTER_MAX_TOKENS или уменьшите MAX_CHARS"
+            )
         raise ValueError(f"ответ модели не разобран: {out.get('parsing_error')}")
     return out["parsed"]
 
@@ -169,6 +189,7 @@ def relevance(state):
         state["document_id"],
         state.get("job_id"),
         "biblio",
+        BIBLIO_MAX_TOKENS,
     )
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
@@ -257,7 +278,7 @@ def extract(state):
             else:
                 pages.append((p.number, p.text))
         s.commit()
-    ok, last_err = 0, None
+    ok, last_err, fatal = 0, None, False
     for chunk in make_chunks(pages):
         nums = [n for n, _ in chunk]
         try:
@@ -273,13 +294,15 @@ def extract(state):
             status, err = "processed", None
         except Exception as e:  # сбой фрагмента не должен терять остальные
             status, err = "error", f"{type(e).__name__}: {e}"[:500]
-            last_err = err
+            last_err, fatal = err, getattr(e, "status_code", None) in FATAL_HTTP
         with SessionLocal() as s:
             for p in s.query(Page).filter(
                 Page.document_id == doc_id, Page.number.in_(nums)
             ):
                 p.status, p.error = status, err
             s.commit()
+        if fatal:  # нет кредитов или неверный ключ: остальные фрагменты упадут так же, прекращаем сразу
+            raise RuntimeError(f"Обработка остановлена: {last_err}")
         ok += status == "processed"
     if pages and not ok:
         raise RuntimeError(

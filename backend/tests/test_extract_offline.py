@@ -72,7 +72,7 @@ class FakeLLM:
         return Bound(schema)
 
 
-ex.get_llm = lambda: FakeLLM()
+ex.get_llm = lambda **kw: FakeLLM()
 init_db()
 shutil.copy(sys.argv[1], "/tmp/kr_offline.pdf")
 with SessionLocal() as s:
