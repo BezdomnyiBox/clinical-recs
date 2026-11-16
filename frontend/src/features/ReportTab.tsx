@@ -29,6 +29,7 @@ export default function ReportTab({ pid }: { pid: number }) {
         <h3 className="mb-1 text-xl">Выгрузка</h3>
         <div className="flex gap-4 text-sm">
           <a className="text-link" href={`/api/projects/${pid}/export/json`} target="_blank" rel="noreferrer">JSON</a>
+          <a className="text-link" href={`/api/projects/${pid}/export/validate`} target="_blank" rel="noreferrer">Проверка по схеме</a>
           <span className="text-muted-foreground">Текст и Word: в разработке</span>
         </div>
       </Card>
