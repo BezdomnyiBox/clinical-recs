@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import jsonschema
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -15,8 +15,10 @@ from app.models import (
     LlmCall,
     Page,
     Project,
+    SECTIONS,
     Thesis,
 )
+from app.pipeline.word_export import render_template_docx
 
 router = APIRouter(tags=["export"])
 SCHEMA_VERSION = "0.2"
@@ -99,7 +101,7 @@ def build_kr(s: Session, pid: int) -> dict:
         units.append(
             clean(
                 {
-                    "id": f"E{c.id}",
+                    "id": f"ev_{c.id}",
                     "subject": c.subject,
                     "predicate": c.predicate,
                     "object": c.object_,
@@ -126,14 +128,14 @@ def build_kr(s: Session, pid: int) -> dict:
     theses = [
         clean(
             {
-                "id": f"T{t.id}",
+                "id": f"rec_{t.id}",
                 "kr_section": t.section,
                 "subsection_title": t.subsection_title,
                 "statement": t.text,
                 "direction": t.direction,
                 "strength_phrase": t.strength_phrase,
                 "intervention": t.intervention,
-                "evidence_refs": [f"E{c.id}" for c in t.cards],
+                "evidence_refs": [f"ev_{c.id}" for c in t.cards],
                 "evidence_backed_core": t.evidence_backed_core,
                 "expert_additions": t.expert_additions,
                 "udd": t.udd,
@@ -203,6 +205,50 @@ def export_full(pid: int, s: Session = Depends(get_session)):
 @router.get("/projects/{pid}/export/json")
 def export_json(pid: int, s: Session = Depends(get_session)):
     return build_kr(s, pid)
+
+
+def render_text(s: Session, pid: int) -> str:
+    """Readable draft text with recommendation numbering and source markers."""
+    project = s.get(Project, pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    lines = [project.title, ""]
+    theses = s.query(Thesis).filter_by(project_id=pid).order_by(Thesis.id).all()
+    grouped = {}
+    for thesis in theses:
+        grouped.setdefault(thesis.section, []).append(thesis)
+    for section in sorted(SECTIONS, key=lambda x: tuple(int(p) for p in x.split("."))):
+        lines.extend([f"{section} {SECTIONS[section]}", ""])
+        for index, thesis in enumerate(grouped.get(section, []), start=1):
+            refs = ", ".join(f"[ev_{card.id}]" for card in thesis.cards)
+            grade = f"УДД {thesis.udd or 'н/д'}, УУР {thesis.uur or 'н/д'}"
+            lines.append(f"{index}. {thesis.text} ({grade})" + (f" {refs}" if refs else ""))
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+@router.get("/projects/{pid}/export/text")
+def export_text(pid: int, s: Session = Depends(get_session)):
+    return Response(
+        render_text(s, pid),
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="kr-{pid}.txt"'},
+    )
+
+
+@router.get("/projects/{pid}/export/docx")
+def export_docx(pid: int, s: Session = Depends(get_session)):
+    project = s.get(Project, pid)
+    if not project:
+        raise HTTPException(404, "Проект не найден")
+    theses = s.query(Thesis).filter_by(project_id=pid).order_by(Thesis.id).all()
+    sources = s.query(Document).filter_by(project_id=pid).order_by(Document.id).all()
+    output = render_template_docx(project, theses, sources)
+    return Response(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="kr-{pid}.docx"'},
+    )
 
 
 @router.get("/projects/{pid}/report")
