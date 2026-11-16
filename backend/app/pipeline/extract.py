@@ -3,6 +3,7 @@
 import json
 import re
 import time
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
 
@@ -59,6 +60,11 @@ SYSTEM_EXTRACT = """Ты извлекаешь доказательства из 
 8. population и conditions (доза, режим, сроки, пороги) заполняй точно по тексту. Если утверждение относится к другой популяции, чем тема проекта, всё равно извлеки и укажи её в population.
 9. Нет подходящих утверждений - верни пустой список."""
 
+SYSTEM_MEANING = """Сравни русскую формулировку доказательства с дословной цитатой на языке источника.
+Определи, следует ли формулировка из цитаты без добавленных фактов, и сохранены ли направление эффекта,
+отрицание, популяция, числа и условия. Цитата может быть краткой, но не додумывай отсутствующие детали.
+Если эквивалентность сомнительна, верни verified=false. Это проверка соответствия смысла, а не оценка качества исследования."""
+
 
 class Biblio(BaseModel):
     title: str | None = None
@@ -104,6 +110,26 @@ class Unit(BaseModel):
 
 class Units(BaseModel):
     units: list[Unit]
+
+
+class MeaningCheck(BaseModel):
+    verified: bool
+    negation_mismatch: bool
+    explanation: str
+
+
+def check_meaning(
+    statement: str, quote: str, negation: bool, doc_id: int, job_id: int | None
+) -> MeaningCheck:
+    return _call(
+        MeaningCheck,
+        SYSTEM_MEANING,
+        f"Формулировка: {statement}\nОтрицание в карточке: {negation}\nЦитата источника: {quote}",
+        doc_id,
+        job_id,
+        "meaning",
+        600,
+    )
 
 
 def make_chunks(
@@ -214,10 +240,11 @@ def _save_units(doc_id: int, study_design: str | None, chunk, units: list[Unit])
     texts = dict(chunk)
     with SessionLocal() as s:
         doc = s.get(Document, doc_id)
-        existing = {
-            c.content_hash: c
-            for c in s.query(EvidenceCard).filter_by(document_id=doc_id)
-        }
+        existing_cards = s.query(EvidenceCard).filter_by(document_id=doc_id).all()
+        existing = {c.content_hash: c for c in existing_cards}
+        by_page = {}
+        for card in existing_cards:
+            by_page.setdefault(card.page_number, []).append(card)
         created = 0
         for u in units:
             # модель часто путает номер страницы: ищем цитату на странице фрагмента, иначе оставляем её ответ
@@ -228,11 +255,39 @@ def _save_units(doc_id: int, study_design: str | None, chunk, units: list[Unit])
             )
             h = content_hash(doc_id, page, u.quote)
             data = u.model_dump() | {"page": page}
-            if c := existing.get(h):
-                if (
-                    c.user_edits
-                ):  # правки пользователя не затираем: новая версия ждёт решения
+            c = existing.get(h)
+            if c is None:
+                # Quotes can change slightly on a rerun. Match only a strong,
+                # unambiguous quote overlap on the same page so distinct claims
+                # are not silently attached to the wrong card.
+                candidates = []
+                normalized_quote = content_hash(doc_id, page, u.quote)
+                for old in by_page.get(page, []):
+                    if old.content_hash == normalized_quote:
+                        c = old
+                        break
+                    score = SequenceMatcher(
+                        None,
+                        " ".join((old.quote or "").casefold().split()),
+                        " ".join(u.quote.casefold().split()),
+                        autojunk=False,
+                    ).ratio()
+                    if score >= 0.78:
+                        candidates.append((score, old))
+                if c is None and candidates:
+                    candidates.sort(key=lambda item: item[0], reverse=True)
+                    best = candidates[0]
+                    second_score = candidates[1][0] if len(candidates) > 1 else 0.0
+                    if best[0] >= 0.86 and (len(candidates) == 1 or best[0] - second_score >= 0.12):
+                        c = best[1]
+            if c:
+                if data != (c.auto_data or {}):
+                    # Never replace a reviewed or unreviewed card in place;
+                    # expose the re-extracted version for an expert decision.
                     c.pending_version = data
+                else:
+                    c.pending_version = None
+                existing[h] = c
                 continue
             c = EvidenceCard(
                 project_id=doc.project_id,
@@ -258,6 +313,7 @@ def _save_units(doc_id: int, study_design: str | None, chunk, units: list[Unit])
             )
             s.add(c)
             existing[h] = c
+            by_page.setdefault(page, []).append(c)
             created += 1
         s.commit()
     return created
