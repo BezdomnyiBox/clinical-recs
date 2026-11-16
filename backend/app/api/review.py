@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db import get_session, to_dict
 from app.pipeline.grading import validate_thesis
-from app.models import SECTIONS, Conflict, EvidenceCard, ExpertEdit, Thesis
+from app.models import SECTIONS, Conflict, Document, EvidenceCard, ExpertEdit, Thesis
 
 router = APIRouter(tags=["review"])
 
@@ -31,6 +31,7 @@ THESIS_FIELDS = {
     "uur",
     "evidence_backed_core",
     "grade_rationale",
+    "quality_criterion",
     "review_status",
 }
 
@@ -136,4 +137,33 @@ def patch_thesis(tid: int, payload: dict, s: Session = Depends(get_session)):
 
 @router.get("/projects/{pid}/conflicts")
 def list_conflicts(pid: int, s: Session = Depends(get_session)):
-    return [to_dict(c) for c in s.query(Conflict).filter_by(project_id=pid)]
+    conflicts = s.query(Conflict).filter_by(project_id=pid).order_by(Conflict.id).all()
+    card_ids = {card_id for conflict in conflicts for card_id in (conflict.card_ids or [])}
+    cards = {
+        card.id: card
+        for card in s.query(EvidenceCard).filter(EvidenceCard.id.in_(card_ids))
+    } if card_ids else {}
+    docs = {
+        doc.id: doc
+        for doc in s.query(Document).filter_by(project_id=pid)
+    }
+    result = []
+    for conflict in conflicts:
+        sides = []
+        for card_id in conflict.card_ids or []:
+            card = cards.get(card_id)
+            if not card:
+                continue
+            document = docs.get(card.document_id)
+            sides.append({
+                "card_id": card.id,
+                "statement_ru": card.statement_ru,
+                "predicate": card.predicate,
+                "negation": card.negation,
+                "quote": card.quote,
+                "page_number": card.page_number,
+                "document_id": card.document_id,
+                "filename": document.filename if document else None,
+            })
+        result.append({**to_dict(conflict), "sides": sides})
+    return result
