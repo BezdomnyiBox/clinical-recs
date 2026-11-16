@@ -9,7 +9,7 @@ export default function ProjectsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { data: projects = [] } = useQuery({ queryKey: ["projects"], queryFn: api.projects });
-  const [form, setForm] = useState({ title: "", age_group: "", icd: "", organization: "" });
+  const [form, setForm] = useState({ title: "", age_group: "adults", icd: "", organization: "" });
   const create = useMutation({
     mutationFn: () => api.createProject({
       title: form.title, age_group: form.age_group, organization: form.organization,
@@ -37,7 +37,11 @@ export default function ProjectsPage() {
         <h2 className="mb-4 text-2xl">Новый проект</h2>
         <div className="space-y-3 rounded-[20px] border border-black/6 bg-card p-5">
           <input className="field" placeholder="Тема" value={form.title} onChange={set("title")} />
-          <input className="field" placeholder="Возрастная группа" value={form.age_group} onChange={set("age_group")} />
+          <select className="field" value={form.age_group} onChange={(e) => setForm({ ...form, age_group: e.target.value })}>
+            <option value="adults">Взрослые</option>
+            <option value="children">Дети</option>
+            <option value="mixed">Взрослые и дети</option>
+          </select>
           <input className="field" placeholder="Коды МКБ-10 через запятую" value={form.icd} onChange={set("icd")} />
           <input className="field" placeholder="Организация-разработчик" value={form.organization} onChange={set("organization")} />
           <Button disabled={!form.title || create.isPending} onClick={() => create.mutate()}>Создать проект</Button>
