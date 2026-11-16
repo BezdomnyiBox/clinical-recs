@@ -1,4 +1,5 @@
 """Детерминированные проверки карточек. Проверка смысла и отрицаний (LLM) добавляется отдельно."""
+
 import hashlib
 import re
 import unicodedata
@@ -23,4 +24,6 @@ def numbers_missing(statement: str, quote: str) -> list[str]:
 
 
 def content_hash(document_id: int, page_number: int, quote: str) -> str:
-    return hashlib.sha256(f"{document_id}|{page_number}|{norm(quote)}".encode()).hexdigest()
+    return hashlib.sha256(
+        f"{document_id}|{page_number}|{norm(quote)}".encode()
+    ).hexdigest()

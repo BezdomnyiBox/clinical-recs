@@ -8,8 +8,14 @@ from app.models import LlmCall
 
 
 def get_llm() -> ChatOpenAI:
-    return ChatOpenAI(model=settings.openrouter_model, api_key=settings.openrouter_api_key,
-                      base_url="https://openrouter.ai/api/v1", temperature=0, timeout=120, max_retries=2)
+    return ChatOpenAI(
+        model=settings.openrouter_model,
+        api_key=settings.openrouter_api_key,
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0,
+        timeout=120,
+        max_retries=2,
+    )
 
 
 def record_usage(job_id: int | None, document_id: int, step: str, msg, started: float):
@@ -17,7 +23,16 @@ def record_usage(job_id: int | None, document_id: int, step: str, msg, started: 
     usage = getattr(msg, "usage_metadata", None) or {}
     cost = (getattr(msg, "response_metadata", {}).get("token_usage") or {}).get("cost")
     with SessionLocal() as s:
-        s.add(LlmCall(job_id=job_id, document_id=document_id, step=step, model=settings.openrouter_model,
-                      input_tokens=usage.get("input_tokens", 0), output_tokens=usage.get("output_tokens", 0),
-                      cost_usd=cost, seconds=time.time() - started))
+        s.add(
+            LlmCall(
+                job_id=job_id,
+                document_id=document_id,
+                step=step,
+                model=settings.openrouter_model,
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+                cost_usd=cost,
+                seconds=time.time() - started,
+            )
+        )
         s.commit()

@@ -9,7 +9,9 @@ SessionLocal = sessionmaker(engine, expire_on_commit=False)
 
 
 def init_db():
-    Base.metadata.create_all(engine)  # TODO: перейти на Alembic, когда схема стабилизируется
+    Base.metadata.create_all(
+        engine
+    )  # TODO: перейти на Alembic, когда схема стабилизируется
 
 
 def get_session():

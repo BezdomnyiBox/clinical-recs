@@ -10,8 +10,13 @@ from app.pipeline.graph import graph
 
 def claim_job():
     with SessionLocal() as s:
-        job = s.scalars(select(Job).where(Job.status == "queued").order_by(Job.id).limit(1)
-                        .with_for_update(skip_locked=True)).first()
+        job = s.scalars(
+            select(Job)
+            .where(Job.status == "queued")
+            .order_by(Job.id)
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        ).first()
         if not job:
             return None
         job.status, job.started_at = "running", datetime.now()
