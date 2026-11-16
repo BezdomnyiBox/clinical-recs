@@ -9,6 +9,7 @@
     docker compose up --build
 
 Интерфейс: http://localhost:5173, API и документация: http://localhost:8000/docs
+База данных (Adminer): http://localhost:8080 - система MySQL, сервер `mysql`, пользователь, пароль и база из `.env`
 
 ## Схема данных
 

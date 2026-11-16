@@ -14,7 +14,7 @@
 ### Корень
 | Файл | За что отвечает |
 |---|---|
-| `docker-compose.yml` | Четыре сервиса: `mysql`, `backend` (FastAPI), `worker` (фоновая обработка PDF, тот же образ), `frontend` (Vite). Тома для базы и загруженных PDF |
+| `docker-compose.yml` | Пять сервисов: `mysql`, `backend` (FastAPI), `worker` (фоновая обработка PDF, тот же образ), `frontend` (Vite), `adminer` (просмотр базы на порту 8080, только с localhost). Тома для базы и загруженных PDF |
 | `.env.example` | Шаблон переменных окружения: пароли MySQL, строка подключения, ключ и модель OpenRouter, каталог загрузок. Копируется в `.env` |
 | `.gitignore` | Исключает `.env`, `__pycache__`, `node_modules` |
 | `README.md` | Запуск, краткая структура, что сделано и что нет |

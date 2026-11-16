@@ -35,6 +35,12 @@ services:
     volumes: [./frontend/src:/app/src]
     depends_on: [backend]
 
+  adminer:  # веб-интерфейс к базе, только для локальной разработки
+    image: adminer
+    ports: ["127.0.0.1:8080:8080"]
+    environment: { ADMINER_DEFAULT_SERVER: mysql }
+    depends_on: [mysql]
+
 volumes:
   mysql_data:
   uploads:
