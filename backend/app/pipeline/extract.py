@@ -1,18 +1,20 @@
 """Узлы графа: проверка релевантности источника (relevance) и извлечение карточек доказательств (extract)."""
 
+import hashlib
 import json
 import re
-import time
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.config import settings
 from app.db import SessionLocal
 from app.models import Document, EvidenceCard, Page, Project
+from app.pipeline.activity import finish_llm_call, start_llm_call
 from app.pipeline.grading import udd_for_source
-from app.pipeline.llm import get_llm, record_usage
+from app.pipeline.llm import get_llm
 from app.pipeline.verify import content_hash, quote_on_page
 
 SPEC = json.loads(
@@ -119,7 +121,14 @@ class MeaningCheck(BaseModel):
 
 
 def check_meaning(
-    statement: str, quote: str, negation: bool, doc_id: int, job_id: int | None
+    statement: str,
+    quote: str,
+    negation: bool,
+    doc_id: int,
+    job_id: int | None,
+    *,
+    card_id: int | None = None,
+    page_number: int | None = None,
 ) -> MeaningCheck:
     return _call(
         MeaningCheck,
@@ -129,6 +138,9 @@ def check_meaning(
         job_id,
         "meaning",
         600,
+        page_start=page_number,
+        page_end=page_number,
+        call_context={"card_id": card_id} if card_id is not None else None,
     )
 
 
@@ -163,24 +175,94 @@ def _call(
     job_id: int | None,
     step: str,
     max_tokens: int | None = None,
+    *,
+    page_start: int | None = None,
+    page_end: int | None = None,
+    call_context: dict | None = None,
 ):
     llm = get_llm(max_tokens=max_tokens).with_structured_output(
         schema, method="function_calling", include_raw=True
     )
-    started = time.time()
-    out = llm.invoke([("system", system), ("human", user)])
-    record_usage(
-        job_id, doc_id, step, out["raw"], started
-    )  # токены пишем и при неудачном разборе
+    prompt_hash = hashlib.sha256(f"{system}\0{user}".encode("utf-8")).hexdigest()
+    call_id, started = start_llm_call(
+        job_id=job_id,
+        document_id=doc_id,
+        step=step,
+        prompt_hash=prompt_hash,
+        page_start=page_start,
+        page_end=page_end,
+        parameters={
+            "model": settings.openrouter_model,
+            "temperature": 0,
+            "max_tokens": max_tokens or settings.openrouter_max_tokens,
+            "output_schema": schema.__name__,
+            **(call_context or {}),
+        },
+    )
+    try:
+        out = llm.invoke([("system", system), ("human", user)])
+    except Exception as exc:
+        try:
+            finish_llm_call(call_id, started, error=exc)
+        except Exception:
+            pass
+        raise
+
     if out.get("parsed") is None:
         if (getattr(out["raw"], "response_metadata", {}) or {}).get(
             "finish_reason"
         ) == "length":
-            raise ValueError(
+            error = ValueError(
                 "ответ обрезан по max_tokens: увеличьте OPENROUTER_MAX_TOKENS или уменьшите MAX_CHARS"
             )
-        raise ValueError(f"ответ модели не разобран: {out.get('parsing_error')}")
-    return out["parsed"]
+        else:
+            error = ValueError(f"ответ модели не разобран: {out.get('parsing_error')}")
+        finish_llm_call(
+            call_id,
+            started,
+            message=out.get("raw"),
+            result_summary={"parsed": False},
+            error=error,
+            status="parse_error",
+        )
+        raise error
+
+    parsed = out["parsed"]
+    finish_llm_call(
+        call_id,
+        started,
+        message=out.get("raw"),
+        result_summary=_llm_result_summary(schema, parsed, call_context),
+    )
+    return parsed
+
+
+def _llm_result_summary(schema, parsed, call_context: dict | None = None) -> dict:
+    context = call_context or {}
+    if schema is Biblio:
+        return {
+            "title": parsed.title,
+            "year": parsed.year,
+            "study_design": parsed.study_design,
+            "relevance": parsed.relevance,
+            "relevance_reason": parsed.relevance_reason[:300],
+        }
+    if schema is Units:
+        recommendations = sum(unit.card_type == "recommendation" for unit in parsed.units)
+        return {
+            "cards_proposed": len(parsed.units),
+            "recommendations_proposed": recommendations,
+            "results_proposed": len(parsed.units) - recommendations,
+            **context,
+        }
+    if schema is MeaningCheck:
+        return {
+            "verified": parsed.verified,
+            "negation_mismatch": parsed.negation_mismatch,
+            "explanation": parsed.explanation[:300],
+            **context,
+        }
+    return {"parsed": True, **context}
 
 
 def _project_context(s, doc: Document) -> str:
@@ -216,6 +298,8 @@ def relevance(state):
         state.get("job_id"),
         "biblio",
         BIBLIO_MAX_TOKENS,
+        page_start=first[0].number if first else None,
+        page_end=first[-1].number if first else None,
     )
     with SessionLocal() as s:
         doc = s.get(Document, state["document_id"])
@@ -345,6 +429,9 @@ def extract(state):
                 doc_id,
                 job_id,
                 "extract",
+                page_start=min(nums),
+                page_end=max(nums),
+                call_context={"pages": nums},
             )
             _save_units(doc_id, study_design, chunk, res.units)
             status, err = "processed", None

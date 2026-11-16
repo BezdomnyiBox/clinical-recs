@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import TypedDict
 import re
 import unicodedata
@@ -6,6 +7,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.db import SessionLocal
 from app.models import Conflict, Document, EvidenceCard, Page, Thesis
+from app.pipeline.activity import finish_processing_event, start_processing_event
 from app.pipeline.extract import check_meaning, extract, relevance
 from app.pipeline.ingest import extract_pages, has_text_layer
 from app.pipeline.verify import numbers_missing, quote_on_page
@@ -149,7 +151,13 @@ def verify(state: State):
             quote_status = "failed" if problems else "verified"
             try:
                 result = check_meaning(
-                    statement, quote, negation, c.document_id, state.get("job_id")
+                    statement,
+                    quote,
+                    negation,
+                    c.document_id,
+                    state.get("job_id"),
+                    card_id=c.id,
+                    page_number=page_number,
                 )
                 meaning_status = "verified" if result.verified and not result.negation_mismatch else "failed"
                 if meaning_status == "failed":
@@ -418,9 +426,142 @@ NODES = [
     ("finalize", finalize),
 ]
 
+
+def _stage_summary(step: str, document_id: int) -> dict:
+    with SessionLocal() as s:
+        doc = s.get(Document, document_id)
+        if doc is None:
+            return {}
+        pages = s.query(Page).filter_by(document_id=document_id).all()
+        cards = s.query(EvidenceCard).filter_by(document_id=document_id).all()
+        page_counts = Counter(page.status for page in pages)
+        if step == "ingest":
+            return {
+                "pages_total": doc.page_count or 0,
+                "text_layer_supported": doc.status != "unsupported",
+            }
+        if step == "relevance":
+            return {
+                "relevance": doc.relevance,
+                "study_design": doc.study_design,
+                "reason": doc.relevance_reason,
+            }
+        if step == "extract":
+            return {
+                "cards_total": len(cards),
+                "recommendations": sum(
+                    card.card_type == "recommendation" for card in cards
+                ),
+                "results": sum(card.card_type == "result" for card in cards),
+                "pending_versions": sum(bool(card.pending_version) for card in cards),
+                "pages_processed": page_counts.get("processed", 0),
+                "pages_failed": page_counts.get("error", 0),
+            }
+        if step == "verify":
+            return {
+                "cards_checked": len(cards),
+                "quotes_verified": sum(
+                    card.quote_verified == "verified" for card in cards
+                ),
+                "quotes_failed": sum(card.quote_verified == "failed" for card in cards),
+                "meaning_verified": sum(
+                    card.meaning_verified == "verified" for card in cards
+                ),
+                "meaning_failed": sum(
+                    card.meaning_verified == "failed" for card in cards
+                ),
+                "meaning_pending": sum(
+                    card.meaning_verified == "pending" for card in cards
+                ),
+            }
+        if step == "dedupe":
+            return {
+                "merged_cards_in_project": s.query(EvidenceCard)
+                .filter_by(project_id=doc.project_id, review_status="merged")
+                .count(),
+                "conflicts_in_project": s.query(Conflict)
+                .filter_by(project_id=doc.project_id)
+                .count(),
+            }
+        if step == "assign_sections":
+            linked_theses = [
+                thesis
+                for thesis in s.query(Thesis).filter_by(project_id=doc.project_id).all()
+                if any(card.document_id == document_id for card in thesis.cards)
+            ]
+            return {
+                "theses_linked": len(linked_theses),
+                "automatic_theses": sum(
+                    thesis.provenance != "manual" for thesis in linked_theses
+                ),
+                "pending_theses": sum(
+                    bool(thesis.pending_version) for thesis in linked_theses
+                ),
+            }
+        if step == "finalize":
+            return {
+                "document_status": doc.status,
+                "pages_total": doc.page_count or 0,
+                "pages_processed": page_counts.get("processed", 0),
+                "pages_failed": page_counts.get("error", 0),
+                "cards_total": len(cards),
+            }
+        return {}
+
+
+def _record_skipped_stage(step: str, document_id: int, job_id: int | None, reason: str):
+    event_id, started = start_processing_event(job_id, document_id, step)
+    finish_processing_event(
+        event_id,
+        started,
+        result_summary={"reason": reason},
+        status="skipped",
+    )
+
+
+def _observe_node(name, fn):
+    def run(state: State):
+        document_id = state["document_id"]
+        job_id = state.get("job_id")
+        event_id, started = start_processing_event(job_id, document_id, name)
+        try:
+            result = fn(state)
+        except Exception as exc:
+            finish_processing_event(event_id, started, error=exc)
+            raise
+        finish_processing_event(
+            event_id,
+            started,
+            result_summary=_stage_summary(name, document_id),
+        )
+        if name == "ingest" and not result.get("supported", False):
+            for skipped in (
+                "relevance",
+                "extract",
+                "verify",
+                "dedupe",
+                "assign_sections",
+                "finalize",
+            ):
+                _record_skipped_stage(
+                    skipped,
+                    document_id,
+                    job_id,
+                    "PDF не содержит поддерживаемый текстовый слой",
+                )
+        elif name == "relevance" and not result.get("relevant", False):
+            for skipped in ("extract", "verify", "dedupe", "assign_sections"):
+                _record_skipped_stage(
+                    skipped, document_id, job_id, "Источник признан нерелевантным"
+                )
+        return result
+
+    return run
+
+
 builder = StateGraph(State)
 for name, fn in NODES:
-    builder.add_node(name, fn)
+    builder.add_node(name, _observe_node(name, fn))
 builder.add_edge(START, "ingest")
 builder.add_conditional_edges(
     "ingest", lambda st: "relevance" if st["supported"] else END

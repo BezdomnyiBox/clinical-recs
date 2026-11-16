@@ -16,7 +16,36 @@ export type Thesis = {
 };
 export type Report = {
   documents: { document_id: number; filename: string; status: string; detail: string | null; pages_total: number | null; pages_by_status: Record<string, number> }[];
-  llm: { requests: number; input_tokens: number; output_tokens: number; cost_usd: number | null; seconds: number };
+  active_jobs: number;
+  activity: ActivityEvent[];
+  llm: {
+    requests: number; completed: number; failed: number; parse_errors: number; running: number;
+    input_tokens: number; output_tokens: number; cost_usd: number | null; seconds: number;
+  };
+};
+export type ActivityEvent = {
+  id: string;
+  kind: "stage" | "model";
+  document_id: number;
+  filename: string | null;
+  step: string;
+  status: string;
+  started_at: string | null;
+  finished_at: string | null;
+  duration_seconds: number | null;
+  model?: string | null;
+  actual_model?: string | null;
+  response_id?: string | null;
+  prompt_hash?: string | null;
+  page_start?: number | null;
+  page_end?: number | null;
+  parameters?: Record<string, unknown> | null;
+  input_tokens?: number;
+  output_tokens?: number;
+  cost_usd?: number | null;
+  result_summary?: Record<string, unknown> | null;
+  error_type?: string | null;
+  error_message?: string | null;
 };
 export type IcdCode = { code: string; name: string; parent_code: string | null; active: boolean };
 export type Checklist = {

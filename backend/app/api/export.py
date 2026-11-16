@@ -14,9 +14,11 @@ from app.models import (
     ExpertEdit,
     LlmCall,
     Page,
+    ProcessingEvent,
     Project,
     SECTIONS,
     Thesis,
+    Job,
 )
 from app.pipeline.word_export import render_template_docx
 
@@ -31,7 +33,9 @@ SCHEMA = json.loads(
 
 def processing_report(s: Session, doc_ids: list[int]) -> dict:
     docs = []
-    for d in s.query(Document).filter(Document.id.in_(doc_ids)):
+    documents = s.query(Document).filter(Document.id.in_(doc_ids)).all()
+    documents_by_id = {document.id: document for document in documents}
+    for d in documents:
         by_status = dict(
             s.query(Page.status, func.count())
             .filter_by(document_id=d.id)
@@ -59,10 +63,92 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
         .filter(LlmCall.document_id.in_(doc_ids))
         .one()
     )
+    status_counts = dict(
+        s.query(LlmCall.status, func.count())
+        .filter(LlmCall.document_id.in_(doc_ids))
+        .group_by(LlmCall.status)
+        .all()
+    )
+    active_jobs = (
+        s.query(Job)
+        .filter(Job.document_id.in_(doc_ids), Job.status.in_(("queued", "running")))
+        .count()
+    )
+    activity = []
+    stage_events = (
+        s.query(ProcessingEvent)
+        .filter(ProcessingEvent.document_id.in_(doc_ids))
+        .order_by(ProcessingEvent.started_at.desc())
+        .limit(200)
+        .all()
+    )
+    for event in stage_events:
+        document = documents_by_id.get(event.document_id)
+        activity.append(
+            {
+                "id": f"stage-{event.id}",
+                "kind": "stage",
+                "job_id": event.job_id,
+                "document_id": event.document_id,
+                "filename": document.filename if document else None,
+                "step": event.step,
+                "status": event.status,
+                "started_at": event.started_at,
+                "finished_at": event.finished_at,
+                "duration_seconds": event.duration_seconds,
+                "result_summary": event.result_summary,
+                "error_type": event.error_type,
+                "error_message": event.error_message,
+            }
+        )
+    llm_calls = (
+        s.query(LlmCall)
+        .filter(LlmCall.document_id.in_(doc_ids))
+        .order_by(func.coalesce(LlmCall.started_at, LlmCall.created_at).desc())
+        .limit(200)
+        .all()
+    )
+    for call in llm_calls:
+        document = documents_by_id.get(call.document_id)
+        activity.append(
+            {
+                "id": f"llm-{call.id}",
+                "kind": "model",
+                "job_id": call.job_id,
+                "document_id": call.document_id,
+                "filename": document.filename if document else None,
+                "step": call.step,
+                "status": call.status,
+                "started_at": call.started_at or call.created_at,
+                "finished_at": call.finished_at,
+                "duration_seconds": call.seconds,
+                "model": call.model,
+                "actual_model": call.actual_model,
+                "response_id": call.response_id,
+                "prompt_hash": call.prompt_hash,
+                "page_start": call.page_start,
+                "page_end": call.page_end,
+                "parameters": call.parameters,
+                "input_tokens": call.input_tokens,
+                "output_tokens": call.output_tokens,
+                "cost_usd": call.cost_usd,
+                "result_summary": call.result_summary,
+                "error_type": call.error_type,
+                "error_message": call.error_message,
+            }
+        )
+    activity.sort(key=lambda item: item["started_at"] or item["created_at"])
+    activity = activity[-300:]
     return {
         "documents": docs,
+        "active_jobs": active_jobs,
+        "activity": activity,
         "llm": {
             "requests": tot[0],
+            "completed": status_counts.get("completed", 0),
+            "failed": status_counts.get("failed", 0),
+            "parse_errors": status_counts.get("parse_error", 0),
+            "running": status_counts.get("running", 0),
             "input_tokens": int(tot[1]),
             "output_tokens": int(tot[2]),
             "cost_usd": tot[3],

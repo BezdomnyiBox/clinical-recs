@@ -11,6 +11,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -269,3 +270,34 @@ class LlmCall(TS, Base):
     output_tokens: Mapped[int] = mapped_column(default=0)
     cost_usd: Mapped[float | None] = mapped_column(Float)
     seconds: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(
+        String(16), default="running", server_default=text("'completed'")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    actual_model: Mapped[str | None] = mapped_column(String(128))
+    response_id: Mapped[str | None] = mapped_column(String(128))
+    prompt_hash: Mapped[str | None] = mapped_column(String(64))
+    page_start: Mapped[int | None]
+    page_end: Mapped[int | None]
+    parameters: Mapped[dict | None] = mapped_column(JSON)
+    result_summary: Mapped[dict | None] = mapped_column(JSON)
+    error_type: Mapped[str | None] = mapped_column(String(128))
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+
+class ProcessingEvent(TS, Base):
+    """Событие этапа обработки документа для журнала выполнения."""
+
+    __tablename__ = "processing_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int | None] = mapped_column(ForeignKey("jobs.id"), index=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id"), index=True)
+    step: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    duration_seconds: Mapped[float] = mapped_column(Float, default=0)
+    result_summary: Mapped[dict | None] = mapped_column(JSON)
+    error_type: Mapped[str | None] = mapped_column(String(128))
+    error_message: Mapped[str | None] = mapped_column(Text)
