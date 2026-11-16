@@ -5,8 +5,8 @@ export type Card = {
   intervention: string | null; quote: string; quote_verified: string; problems: string[]; review_status: string;
 };
 export type Thesis = {
-  id: number; section: string; text: string; origin: string; comment: string | null;
-  udd: string | null; uur: string | null; review_status: string; card_ids: number[];
+  id: number; section: string; text: string; provenance: string; comment: string | null;
+  udd: number | null; uur: string | null; review_status: string; card_ids: number[];
 };
 export type Report = {
   documents: { document_id: number; filename: string; status: string; detail: string | null; pages_total: number | null; pages_by_status: Record<string, number> }[];
