@@ -1,6 +1,7 @@
 import { Link, Route, Routes } from "react-router-dom";
 import ProjectPage from "./pages/ProjectPage";
 import ProjectsPage from "./pages/ProjectsPage";
+import GlossaryPage from "./pages/GlossaryPage";
 import Logo from './assets/logo.svg';
 
 
@@ -15,6 +16,9 @@ export default function App() {
             <Link to="/" className="text-[20px] font-medium tracking-tight">
               Клинические рекомендации из статей
             </Link>
+            <Link to="/glossary" className="text-[13px] text-muted-foreground">
+              Глоссарий
+            </Link>
             <p className="text-[13px] text-muted-foreground">Черновик для проверки экспертом, не для лечения пациентов</p>
           </div>
         </div>
@@ -23,6 +27,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectPage />} />
+          <Route path="/glossary" element={<GlossaryPage />} />
         </Routes>
       </main>
     </div>
