@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -10,7 +12,7 @@ router = APIRouter(tags=["projects"])
 
 class ProjectIn(BaseModel):
     title: str
-    age_group: str = ""
+    age_group: Literal["adults", "children", "mixed"] = "adults"
     icd_codes: list[str] = []
     organization: str = ""
 
