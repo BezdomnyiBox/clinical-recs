@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import documents, export, projects, review
+from app.api import documents, export, glossary, projects, review
 from app.db import init_db
 
 
@@ -13,7 +13,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Черновик клинических рекомендаций", lifespan=lifespan)
-for module in (projects, documents, review, export):
+for module in (projects, documents, review, export, glossary):
     app.include_router(module.router, prefix="/api")
 
 
