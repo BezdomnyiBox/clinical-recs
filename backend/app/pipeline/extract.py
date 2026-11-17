@@ -215,9 +215,10 @@ def _call(
         page_start=page_start,
         page_end=page_end,
         parameters={
-            "model": settings.openrouter_model,
+            "provider": settings.llm_provider,
+            "model": settings.active_llm_model,
             "temperature": 0,
-            "max_tokens": max_tokens or settings.openrouter_max_tokens,
+            "max_tokens": max_tokens or settings.llm_max_tokens,
             "output_schema": schema.__name__,
             **(call_context or {}),
         },
@@ -236,7 +237,7 @@ def _call(
             "finish_reason"
         ) == "length":
             error = ValueError(
-                "ответ обрезан по max_tokens: увеличьте OPENROUTER_MAX_TOKENS или уменьшите MAX_CHARS"
+                "ответ обрезан по max_tokens: увеличьте LLM_MAX_TOKENS или уменьшите MAX_CHARS"
             )
         else:
             error = ValueError(f"ответ модели не разобран: {out.get('parsing_error')}")

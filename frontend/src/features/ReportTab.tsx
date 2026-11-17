@@ -68,6 +68,7 @@ const SUMMARY_LABELS: Record<string, string> = {
 };
 
 const PARAMETER_LABELS: Record<string, string> = {
+  provider: "Провайдер",
   temperature: "Температура",
   max_tokens: "Максимум токенов ответа",
   output_schema: "Формат ответа",
@@ -81,6 +82,12 @@ function formatNumber(value: unknown): string {
   if (typeof value === "string") return value || "—";
   if (value == null) return "—";
   return JSON.stringify(value) ?? String(value);
+}
+
+function formatParameterValue(key: string, value: unknown): string {
+  if (key === "provider" && value === "iacpaas") return "ИАПУ ДВО РАН";
+  if (key === "provider" && value === "openrouter") return "OpenRouter";
+  return formatNumber(value);
 }
 
 function formatCost(value: number | null | undefined): string {
@@ -175,7 +182,7 @@ function ActivityDetails({ event }: { event: ActivityEvent }) {
           {Object.entries(params).map(([key, value]) => (
             <div key={key} className="contents">
               <dt className="text-muted-foreground">{PARAMETER_LABELS[key] ?? key}</dt>
-              <dd className="break-all">{formatNumber(value)}</dd>
+              <dd className="break-all">{formatParameterValue(key, value)}</dd>
             </div>
           ))}
         </dl>

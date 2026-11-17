@@ -469,7 +469,7 @@
             "term": "OpenRouter",
             "en": "OpenRouter",
             "category": "llm",
-            "definition": "Сервис с единым API ко многим моделям. Модель выбирается переменной OPENROUTER_MODEL."
+            "definition": "Агрегатор языковых моделей с OpenAI-совместимым API. Для использования задайте LLM_PROVIDER=openrouter и укажите модель в OPENROUTER_MODEL."
         },
         {
             "term": "Фрагмент (чанк)",
