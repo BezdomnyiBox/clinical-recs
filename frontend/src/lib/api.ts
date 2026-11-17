@@ -15,18 +15,25 @@ export type Thesis = {
   quality_criterion: { is_criterion: boolean; criterion_text?: string | null; applicable_stage?: string; measurable?: boolean; auto_eligible?: boolean } | null;
 };
 export type Report = {
-  documents: { document_id: number; filename: string; status: string; detail: string | null; pages_total: number | null; pages_by_status: Record<string, number> }[];
+  documents: { document_id: number; filename: string; status: string; detail: string | null; pages_total: number | null; pages_by_status: Record<string, number>; cards_count: number }[];
   active_jobs: number;
+  jobs: ProcessingJob[];
   activity: ActivityEvent[];
+  stage_errors: number;
   llm: {
     requests: number; completed: number; failed: number; parse_errors: number; running: number;
     input_tokens: number; output_tokens: number; cost_usd: number | null; seconds: number;
   };
 };
+export type ProcessingJob = {
+  id: number; document_id: number; kind: string; status: string; error: string | null;
+  created_at: string; started_at: string | null; finished_at: string | null;
+};
 export type ActivityEvent = {
   id: string;
   kind: "stage" | "model";
-  document_id: number;
+  job_id: number | null;
+  document_id: number | null;
   filename: string | null;
   step: string;
   status: string;

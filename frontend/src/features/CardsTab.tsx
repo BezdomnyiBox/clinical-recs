@@ -4,10 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { api, pdfUrl, type Card as EvidenceCard } from "@/lib/api";
 import { QUOTE_STATUS, REVIEW_STATUS } from "@/lib/labels";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 export default function CardsTab({ pid }: { pid: number }) {
   const qc = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const focusedCardId = Number(searchParams.get("card"));
   const { data: cards = [] } = useQuery({ queryKey: ["cards", pid], queryFn: () => api.cards(pid) });
   const decide = useMutation({
     mutationFn: ({ id, status }: { id: number; status: string }) => api.patchCard(id, { review_status: status }),
@@ -17,6 +20,11 @@ export default function CardsTab({ pid }: { pid: number }) {
     mutationFn: ({ id, values }: { id: number; values: Partial<EvidenceCard> }) => api.patchCard(id, values),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cards", pid] }),
   });
+
+  useEffect(() => {
+    if (!focusedCardId || !cards.some((card) => card.id === focusedCardId)) return;
+    document.getElementById(`card-${focusedCardId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [cards, focusedCardId]);
 
   if (!cards.length) return <p className="text-sm text-muted-foreground">Карточек пока нет. Они появятся после обработки документов.</p>;
   return (
@@ -71,7 +79,7 @@ export default function CardsTab({ pid }: { pid: number }) {
           </>;
         };
         return (
-          <Card key={c.id} className="space-y-2">
+          <Card id={`card-${c.id}`} key={c.id} className={`space-y-2 ${focusedCardId === c.id ? "ring-2 ring-accent" : ""}`}>
             <p className="font-medium">{c.statement_ru}</p>
             <blockquote className="border-l-[3px] border-accent pl-3 text-[15px] italic leading-snug text-black/70">{c.quote}</blockquote>
             <Preview />

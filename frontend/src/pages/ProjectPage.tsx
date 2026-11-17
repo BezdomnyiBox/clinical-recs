@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useSearchParams, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import CardsTab from "@/features/CardsTab";
 import ChecklistTab from "@/features/ChecklistTab";
@@ -14,8 +13,19 @@ const TABS = [["docs", "Документы"], ["cards", "Карточки"], ["t
 
 export default function ProjectPage() {
   const pid = Number(useParams().id);
-  const [tab, setTab] = useState<(typeof TABS)[number][0]>("docs");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab = TABS.some(([key]) => key === requestedTab)
+    ? requestedTab as (typeof TABS)[number][0]
+    : "docs";
   const { data: project } = useQuery({ queryKey: ["project", pid], queryFn: () => api.project(pid) });
+
+  function selectTab(nextTab: (typeof TABS)[number][0]) {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", nextTab);
+    if (nextTab !== "cards") next.delete("card");
+    setSearchParams(next);
+  }
 
   return (
     <div>
@@ -25,7 +35,7 @@ export default function ProjectPage() {
       </p>
       <nav className="mb-6 flex flex-wrap gap-2">
         {TABS.map(([key, label]) => (
-          <Button key={key} size="sm" className="rounded-full" variant={tab === key ? "dark" : "outline"} onClick={() => setTab(key)}>{label}</Button>
+          <Button key={key} size="sm" className="rounded-full" variant={tab === key ? "dark" : "outline"} onClick={() => selectTab(key)}>{label}</Button>
         ))}
       </nav>
       {tab === "docs" && <DocumentsTab pid={pid} />}

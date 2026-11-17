@@ -35,6 +35,12 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
     docs = []
     documents = s.query(Document).filter(Document.id.in_(doc_ids)).all()
     documents_by_id = {document.id: document for document in documents}
+    card_counts = dict(
+        s.query(EvidenceCard.document_id, func.count())
+        .filter(EvidenceCard.document_id.in_(doc_ids))
+        .group_by(EvidenceCard.document_id)
+        .all()
+    )
     for d in documents:
         by_status = dict(
             s.query(Page.status, func.count())
@@ -50,6 +56,7 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
                 "detail": d.status_detail,
                 "pages_total": d.page_count,
                 "pages_by_status": by_status,
+                "cards_count": card_counts.get(d.id, 0),
             }
         )
     tot = (
@@ -74,12 +81,45 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
         .filter(Job.document_id.in_(doc_ids), Job.status.in_(("queued", "running")))
         .count()
     )
+    jobs = (
+        s.query(Job)
+        .filter(Job.document_id.in_(doc_ids))
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    job_activity = [
+        {
+            "id": job.id,
+            "document_id": job.document_id,
+            "kind": job.kind,
+            "status": job.status,
+            "error": job.error,
+            "created_at": job.created_at,
+            "started_at": job.started_at,
+            "finished_at": job.finished_at,
+        }
+        for job in jobs
+    ]
     activity = []
+    # Keep recent activity for every article. A project-wide limit would hide
+    # older articles as soon as a few documents produce many model calls.
+    stage_ranked = (
+        s.query(
+            ProcessingEvent.id.label("event_id"),
+            func.row_number()
+            .over(
+                partition_by=ProcessingEvent.document_id,
+                order_by=ProcessingEvent.started_at.desc(),
+            )
+            .label("rank"),
+        )
+        .filter(ProcessingEvent.document_id.in_(doc_ids))
+        .subquery()
+    )
     stage_events = (
         s.query(ProcessingEvent)
-        .filter(ProcessingEvent.document_id.in_(doc_ids))
-        .order_by(ProcessingEvent.started_at.desc())
-        .limit(200)
+        .join(stage_ranked, ProcessingEvent.id == stage_ranked.c.event_id)
+        .filter(stage_ranked.c.rank <= 200)
         .all()
     )
     for event in stage_events:
@@ -101,11 +141,23 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
                 "error_message": event.error_message,
             }
         )
+    call_ranked = (
+        s.query(
+            LlmCall.id.label("call_id"),
+            func.row_number()
+            .over(
+                partition_by=LlmCall.document_id,
+                order_by=func.coalesce(LlmCall.started_at, LlmCall.created_at).desc(),
+            )
+            .label("rank"),
+        )
+        .filter(LlmCall.document_id.in_(doc_ids))
+        .subquery()
+    )
     llm_calls = (
         s.query(LlmCall)
-        .filter(LlmCall.document_id.in_(doc_ids))
-        .order_by(func.coalesce(LlmCall.started_at, LlmCall.created_at).desc())
-        .limit(200)
+        .join(call_ranked, LlmCall.id == call_ranked.c.call_id)
+        .filter(call_ranked.c.rank <= 200)
         .all()
     )
     for call in llm_calls:
@@ -142,11 +194,21 @@ def processing_report(s: Session, doc_ids: list[int]) -> dict:
             }
         )
     activity.sort(key=lambda item: item["started_at"] or item["created_at"])
-    activity = activity[-300:]
+    stage_error_count = (
+        s.query(func.count())
+        .filter(
+            ProcessingEvent.document_id.in_(doc_ids),
+            ProcessingEvent.status == "failed",
+        )
+        .scalar()
+        or 0
+    )
     return {
         "documents": docs,
         "active_jobs": active_jobs,
+        "jobs": job_activity,
         "activity": activity,
+        "stage_errors": stage_error_count,
         "llm": {
             "requests": tot[0],
             "completed": status_counts.get("completed", 0),
